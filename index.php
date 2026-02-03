@@ -2,6 +2,15 @@
 $pageTitle = 'Dashboard - CashFlow Manager';
 require_once 'config/database.php';
 
+// Check database connection
+if ($dbError) {
+    require_once 'includes/header.php';
+    echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Database connection failed: ' . htmlspecialchars($dbError) . '</div>';
+    echo '<div class="card"><div class="empty-state"><i class="fas fa-database"></i><h3>Database Tidak Tersedia</h3><p>Pastikan database MySQL sudah dikonfigurasi dengan benar.</p></div></div>';
+    require_once 'includes/footer.php';
+    exit;
+}
+
 // Get total income
 $stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM income");
 $totalIncome = $stmt->fetch()['total'];
