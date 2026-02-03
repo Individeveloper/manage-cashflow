@@ -36,11 +36,11 @@ $recentTransactions = $stmt->fetchAll();
 
 // Get monthly summary for current month
 $currentMonth = date('Y-m');
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE DATE_FORMAT(date, '%Y-%m') = ?");
+$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE TO_CHAR(date, 'YYYY-MM') = ?");
 $stmt->execute([$currentMonth]);
 $monthlyIncome = $stmt->fetch()['total'];
 
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE DATE_FORMAT(date, '%Y-%m') = ?");
+$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE TO_CHAR(date, 'YYYY-MM') = ?");
 $stmt->execute([$currentMonth]);
 $monthlyExpenses = $stmt->fetch()['total'];
 

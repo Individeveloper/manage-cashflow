@@ -1,11 +1,11 @@
 <?php
-// Database initialization script
+// Database initialization script for Supabase (PostgreSQL)
 require_once 'database.php';
 
 $sql = "
 -- Create income table
 CREATE TABLE IF NOT EXISTS income (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     description VARCHAR(255) NOT NULL,
     amount DECIMAL(15, 2) NOT NULL,
     category VARCHAR(100) DEFAULT 'Umum',
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS income (
 
 -- Create expenses table
 CREATE TABLE IF NOT EXISTS expenses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     description VARCHAR(255) NOT NULL,
     amount DECIMAL(15, 2) NOT NULL,
     category VARCHAR(100) DEFAULT 'Umum',
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 
 -- Create investments table
 CREATE TABLE IF NOT EXISTS investments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     type VARCHAR(100) NOT NULL,
     initial_amount DECIMAL(15, 2) NOT NULL,
@@ -33,34 +33,36 @@ CREATE TABLE IF NOT EXISTS investments (
     purchase_date DATE NOT NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create assets table (for cash and other liquid assets)
 CREATE TABLE IF NOT EXISTS assets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     type VARCHAR(100) NOT NULL,
     amount DECIMAL(15, 2) NOT NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create expense categories
 CREATE TABLE IF NOT EXISTS expense_categories (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
 -- Create income categories
 CREATE TABLE IF NOT EXISTS income_categories (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
+";
 
+$insertCategories = "
 -- Insert default expense categories
-INSERT IGNORE INTO expense_categories (name) VALUES 
+INSERT INTO expense_categories (name) VALUES 
 ('Makanan & Minuman'),
 ('Transportasi'),
 ('Belanja'),
@@ -69,20 +71,23 @@ INSERT IGNORE INTO expense_categories (name) VALUES
 ('Kesehatan'),
 ('Pendidikan'),
 ('Investasi'),
-('Lainnya');
+('Lainnya')
+ON CONFLICT (name) DO NOTHING;
 
 -- Insert default income categories
-INSERT IGNORE INTO income_categories (name) VALUES 
+INSERT INTO income_categories (name) VALUES 
 ('Gaji'),
 ('Bonus'),
 ('Freelance'),
 ('Investasi'),
 ('Hadiah'),
-('Lainnya');
+('Lainnya')
+ON CONFLICT (name) DO NOTHING;
 ";
 
 try {
     $pdo->exec($sql);
+    $pdo->exec($insertCategories);
     echo "Database tables created successfully!";
 } catch (PDOException $e) {
     echo "Error creating tables: " . $e->getMessage();

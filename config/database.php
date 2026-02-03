@@ -1,14 +1,14 @@
 <?php
-// Railway MySQL Database Configuration
-$host = getenv('MYSQLHOST') ?: 'localhost';
-$port = getenv('MYSQLPORT') ?: '3306';
-$database = getenv('MYSQLDATABASE') ?: 'cashflow_db';
-$username = getenv('MYSQLUSER') ?: 'root';
-$password = getenv('MYSQLPASSWORD') ?: '';
+// Supabase PostgreSQL Database Configuration
+$host = getenv('SUPABASE_HOST') ?: 'localhost';
+$port = getenv('SUPABASE_PORT') ?: '5432';
+$database = getenv('SUPABASE_DATABASE') ?: 'postgres';
+$username = getenv('SUPABASE_USER') ?: 'postgres';
+$password = getenv('SUPABASE_PASSWORD') ?: '';
 
 try {
     $pdo = new PDO(
-        "mysql:host=$host;port=$port;dbname=$database;charset=utf8mb4",
+        "pgsql:host=$host;port=$port;dbname=$database",
         $username,
         $password,
         [
