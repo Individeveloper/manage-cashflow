@@ -3,10 +3,21 @@ $pageTitle = 'Dashboard - CashFlow Manager';
 require_once 'config/database.php';
 
 // Check database connection
-if ($dbError) {
+if ($dbError || !$pdo) {
     require_once 'includes/header.php';
-    echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Database connection failed: ' . htmlspecialchars($dbError) . '</div>';
-    echo '<div class="card"><div class="empty-state"><i class="fas fa-database"></i><h3>Database Tidak Tersedia</h3><p>Pastikan database MySQL sudah dikonfigurasi dengan benar.</p></div></div>';
+    echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Database connection failed: ' . htmlspecialchars($dbError ?: 'Unknown error') . '</div>';
+    echo '<div class="card"><div class="empty-state"><i class="fas fa-database"></i><h3>Database Tidak Tersedia</h3><p>Pastikan database MySQL sudah dikonfigurasi dengan benar.<br><a href="config/init_db.php">Klik di sini untuk inisialisasi database</a></p></div></div>';
+    require_once 'includes/footer.php';
+    exit;
+}
+
+// Check if tables exist, if not redirect to init
+try {
+    $stmt = $pdo->query("SELECT 1 FROM income LIMIT 1");
+} catch (PDOException $e) {
+    require_once 'includes/header.php';
+    echo '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Tabel database belum dibuat.</div>';
+    echo '<div class="card"><div class="empty-state"><i class="fas fa-database"></i><h3>Database Perlu Inisialisasi</h3><p><a href="config/init_db.php" class="btn btn-primary">Klik di sini untuk membuat tabel</a></p></div></div>';
     require_once 'includes/footer.php';
     exit;
 }
