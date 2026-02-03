@@ -81,6 +81,11 @@ INSERT IGNORE INTO income_categories (name) VALUES
 ('Lainnya');
 ";
 
+// Check database connection first
+if ($dbError || !$pdo) {
+    die("Database connection failed: " . ($dbError ?: "Unknown error") . "<br><br>Please check your environment variables: MYSQLHOST, MYSQLPORT, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD");
+}
+
 try {
     $pdo->exec($sql);
     echo "Database tables created successfully!";
