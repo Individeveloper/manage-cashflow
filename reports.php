@@ -17,11 +17,6 @@ $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WH
 $stmt->execute([$startDate, $endDate]);
 $monthlyExpenses = $stmt->fetch()['total'];
 
-// Get monthly investment expenses
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE category = 'Investasi' AND date BETWEEN ? AND ?");
-$stmt->execute([$startDate, $endDate]);
-$monthlyInvestmentExpenses = $stmt->fetch()['total'];
-
 // Get total income
 $stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM income");
 $totalIncome = $stmt->fetch()['total'];
@@ -30,16 +25,9 @@ $totalIncome = $stmt->fetch()['total'];
 $stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM expenses");
 $totalExpenses = $stmt->fetch()['total'];
 
-// Get total investments value
-$stmt = $pdo->query("SELECT COALESCE(SUM(current_value), 0) as total FROM investments");
-$totalInvestments = $stmt->fetch()['total'];
-
 // Get total account balances
 $stmt = $pdo->query("SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE is_active = 1");
 $totalAccountBalance = $stmt->fetch()['total'];
-
-// Get total all assets (accounts + investments)
-$totalAssets = $totalAccountBalance + $totalInvestments;
 
 // Get account balances for report
 $stmt = $pdo->query("SELECT * FROM accounts WHERE is_active = 1 ORDER BY FIELD(type, 'Utama', 'Tabungan', 'Dana Darurat', 'Investasi', 'E-Wallet', 'Lainnya'), name");
@@ -155,12 +143,12 @@ require_once 'includes/header.php';
             <div class="neraca-item-value"><?php echo formatRupiah($totalExpenses); ?></div>
         </div>
         <div class="neraca-item">
-            <div class="neraca-item-label">Saldo Rekening</div>
-            <div class="neraca-item-value"><?php echo formatRupiah($totalAccountBalance); ?></div>
+            <div class="neraca-item-label">Saldo Bersih</div>
+            <div class="neraca-item-value"><?php echo formatRupiah($totalIncome - $totalExpenses); ?></div>
         </div>
         <div class="neraca-item">
-            <div class="neraca-item-label">Total Kekayaan</div>
-            <div class="neraca-item-value"><?php echo formatRupiah($totalAssets); ?></div>
+            <div class="neraca-item-label">Saldo Rekening</div>
+            <div class="neraca-item-value"><?php echo formatRupiah($totalAccountBalance); ?></div>
         </div>
     </div>
 </div>

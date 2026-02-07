@@ -63,18 +63,6 @@
                 </a>
             </li>
             <li>
-                <a href="investments.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'investments.php' ? 'active' : ''; ?>">
-                    <i class="fas fa-chart-line"></i>
-                    Investasi
-                </a>
-            </li>
-            <li>
-                <a href="assets.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'assets.php' ? 'active' : ''; ?>">
-                    <i class="fas fa-piggy-bank"></i>
-                    Aset
-                </a>
-            </li>
-            <li>
                 <a href="reports.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
                     <i class="fas fa-chart-pie"></i>
                     Laporan
@@ -100,6 +88,10 @@
         <a href="expenses.php" class="bottom-nav-item <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'active' : ''; ?>">
             <i class="fas fa-arrow-up"></i>
             <span>Keluar</span>
+        </a>
+        <a href="transfers.php" class="bottom-nav-item <?php echo basename($_SERVER['PHP_SELF']) == 'transfers.php' ? 'active' : ''; ?>">
+            <i class="fas fa-exchange-alt"></i>
+            <span>Transfer</span>
         </a>
         <a href="reports.php" class="bottom-nav-item <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
             <i class="fas fa-chart-pie"></i>
