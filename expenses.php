@@ -12,15 +12,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $description = trim($_POST['description']);
             $amount = floatval(str_replace(['.', ','], ['', '.'], $_POST['amount']));
             $category = trim($_POST['category']);
+            $account_id = intval($_POST['account_id']);
             $date = $_POST['date'];
             
-            if ($description && $amount > 0 && $date) {
-                $stmt = $pdo->prepare("INSERT INTO expenses (description, amount, category, date) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$description, $amount, $category, $date]);
-                $message = 'Pengeluaran berhasil ditambahkan!';
-                $messageType = 'success';
+            if ($description && $amount > 0 && $account_id && $date) {
+                // Check sufficient balance
+                $stmt = $pdo->prepare("SELECT balance, name FROM accounts WHERE id = ?");
+                $stmt->execute([$account_id]);
+                $account = $stmt->fetch();
+                
+                if (!$account) {
+                    $message = 'Rekening tidak ditemukan!';
+                    $messageType = 'danger';
+                } elseif ($account['balance'] < $amount) {
+                    $message = 'Saldo rekening ' . htmlspecialchars($account['name']) . ' tidak mencukupi! (Saldo: ' . formatRupiah($account['balance']) . ')';
+                    $messageType = 'danger';
+                } else {
+                    $pdo->beginTransaction();
+                    try {
+                        // Insert expense record (Debit: beban, Kredit: rekening berkurang)
+                        $stmt = $pdo->prepare("INSERT INTO expenses (description, amount, category, account_id, date) VALUES (?, ?, ?, ?, ?)");
+                        $stmt->execute([$description, $amount, $category, $account_id, $date]);
+                        
+                        // Update account balance (Kredit rekening - saldo berkurang)
+                        $stmt = $pdo->prepare("UPDATE accounts SET balance = balance - ? WHERE id = ?");
+                        $stmt->execute([$amount, $account_id]);
+                        
+                        $pdo->commit();
+                        $message = 'Pengeluaran berhasil ditambahkan dan saldo rekening dikurangi!';
+                        $messageType = 'success';
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $message = 'Gagal menambah pengeluaran: ' . $e->getMessage();
+                        $messageType = 'danger';
+                    }
+                }
             } else {
-                $message = 'Mohon lengkapi semua field dengan benar!';
+                $message = 'Mohon lengkapi semua field dengan benar (termasuk pilih rekening)!';
                 $messageType = 'danger';
             }
         } elseif ($_POST['action'] == 'edit') {
@@ -28,13 +56,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $description = trim($_POST['description']);
             $amount = floatval(str_replace(['.', ','], ['', '.'], $_POST['amount']));
             $category = trim($_POST['category']);
+            $account_id = intval($_POST['account_id']);
             $date = $_POST['date'];
             
-            if ($id && $description && $amount > 0 && $date) {
-                $stmt = $pdo->prepare("UPDATE expenses SET description = ?, amount = ?, category = ?, date = ? WHERE id = ?");
-                $stmt->execute([$description, $amount, $category, $date, $id]);
-                $message = 'Pengeluaran berhasil diperbarui!';
-                $messageType = 'success';
+            if ($id && $description && $amount > 0 && $account_id && $date) {
+                $pdo->beginTransaction();
+                try {
+                    // Get old expense data to reverse balance
+                    $stmt = $pdo->prepare("SELECT amount, account_id FROM expenses WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $oldExpense = $stmt->fetch();
+                    
+                    // Reverse old balance (Debit rekening lama - kembalikan saldo)
+                    if ($oldExpense && $oldExpense['account_id']) {
+                        $stmt = $pdo->prepare("UPDATE accounts SET balance = balance + ? WHERE id = ?");
+                        $stmt->execute([$oldExpense['amount'], $oldExpense['account_id']]);
+                    }
+                    
+                    // Update expense record
+                    $stmt = $pdo->prepare("UPDATE expenses SET description = ?, amount = ?, category = ?, account_id = ?, date = ? WHERE id = ?");
+                    $stmt->execute([$description, $amount, $category, $account_id, $date, $id]);
+                    
+                    // Apply new balance (Kredit rekening baru)
+                    $stmt = $pdo->prepare("UPDATE accounts SET balance = balance - ? WHERE id = ?");
+                    $stmt->execute([$amount, $account_id]);
+                    
+                    $pdo->commit();
+                    $message = 'Pengeluaran berhasil diperbarui!';
+                    $messageType = 'success';
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $message = 'Gagal memperbarui pengeluaran: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
             }
         }
     }
@@ -43,18 +97,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // Handle delete
 if (isset($_GET['delete'])) {
     $id = intval($_GET['delete']);
-    $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ?");
-    $stmt->execute([$id]);
-    $message = 'Pengeluaran berhasil dihapus!';
-    $messageType = 'success';
+    $pdo->beginTransaction();
+    try {
+        // Get expense data to reverse balance
+        $stmt = $pdo->prepare("SELECT amount, account_id FROM expenses WHERE id = ?");
+        $stmt->execute([$id]);
+        $oldExpense = $stmt->fetch();
+        
+        // Reverse balance (Debit rekening - kembalikan saldo)
+        if ($oldExpense && $oldExpense['account_id']) {
+            $stmt = $pdo->prepare("UPDATE accounts SET balance = balance + ? WHERE id = ?");
+            $stmt->execute([$oldExpense['amount'], $oldExpense['account_id']]);
+        }
+        
+        // Delete expense record
+        $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        $pdo->commit();
+        $message = 'Pengeluaran berhasil dihapus dan saldo rekening dikembalikan!';
+        $messageType = 'success';
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $message = 'Gagal menghapus pengeluaran: ' . $e->getMessage();
+        $messageType = 'danger';
+    }
 }
 
 // Get expense categories
 $stmt = $pdo->query("SELECT name FROM expense_categories ORDER BY name");
 $categories = $stmt->fetchAll();
 
-// Get all expense records
-$stmt = $pdo->query("SELECT * FROM expenses ORDER BY date DESC, id DESC");
+// Get active accounts
+$stmt = $pdo->query("SELECT * FROM accounts WHERE is_active = 1 ORDER BY name");
+$accounts = $stmt->fetchAll();
+
+// Get all expense records with account name
+$stmt = $pdo->query("SELECT e.*, a.name as account_name, a.icon as account_icon, a.color as account_color FROM expenses e LEFT JOIN accounts a ON e.account_id = a.id ORDER BY e.date DESC, e.id DESC");
 $expenses = $stmt->fetchAll();
 
 // Get total expenses
@@ -120,6 +199,7 @@ require_once 'includes/header.php';
                         <th>Tanggal</th>
                         <th>Deskripsi</th>
                         <th>Kategori</th>
+                        <th>Dari Rekening</th>
                         <th>Jumlah</th>
                         <th>Aksi</th>
                     </tr>
@@ -133,6 +213,16 @@ require_once 'includes/header.php';
                                 <span class="badge <?php echo $expense['category'] == 'Investasi' ? 'badge-primary' : 'badge-danger'; ?>">
                                     <?php echo htmlspecialchars($expense['category']); ?>
                                 </span>
+                            </td>
+                            <td>
+                                <?php if ($expense['account_name']): ?>
+                                    <span style="color: <?php echo htmlspecialchars($expense['account_color'] ?? '#4361ee'); ?>;">
+                                        <i class="fas fa-<?php echo htmlspecialchars($expense['account_icon'] ?? 'university'); ?>"></i>
+                                    </span>
+                                    <?php echo htmlspecialchars($expense['account_name']); ?>
+                                <?php else: ?>
+                                    <span style="color: #6c757d;">-</span>
+                                <?php endif; ?>
                             </td>
                             <td class="text-danger" style="font-weight: 600;">
                                 -<?php echo formatRupiah($expense['amount']); ?>
@@ -189,6 +279,19 @@ require_once 'includes/header.php';
             </div>
             
             <div class="form-group">
+                <label class="form-label">Dari Rekening *</label>
+                <select name="account_id" class="form-control" required>
+                    <option value="">-- Pilih Rekening Sumber --</option>
+                    <?php foreach ($accounts as $acc): ?>
+                        <option value="<?php echo $acc['id']; ?>">
+                            <?php echo htmlspecialchars($acc['name']); ?> (<?php echo htmlspecialchars($acc['type']); ?>) - Saldo: <?php echo formatRupiah($acc['balance']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small style="color: #6c757d;"><i class="fas fa-info-circle"></i> Pengeluaran akan mengurangi saldo rekening yang dipilih (Kredit)</small>
+            </div>
+            
+            <div class="form-group">
                 <label class="form-label">Tanggal</label>
                 <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
             </div>
@@ -231,6 +334,18 @@ require_once 'includes/header.php';
             </div>
             
             <div class="form-group">
+                <label class="form-label">Dari Rekening *</label>
+                <select name="account_id" id="edit_account_id" class="form-control" required>
+                    <option value="">-- Pilih Rekening Sumber --</option>
+                    <?php foreach ($accounts as $acc): ?>
+                        <option value="<?php echo $acc['id']; ?>">
+                            <?php echo htmlspecialchars($acc['name']); ?> (<?php echo htmlspecialchars($acc['type']); ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="form-group">
                 <label class="form-label">Tanggal</label>
                 <input type="date" name="date" id="edit_date" class="form-control" required>
             </div>
@@ -248,6 +363,7 @@ function editExpense(expense) {
     document.getElementById('edit_description').value = expense.description;
     document.getElementById('edit_amount').value = new Intl.NumberFormat('id-ID').format(expense.amount);
     document.getElementById('edit_category').value = expense.category;
+    document.getElementById('edit_account_id').value = expense.account_id || '';
     document.getElementById('edit_date').value = expense.date;
     openModal('editModal');
 }

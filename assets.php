@@ -139,7 +139,7 @@ require_once 'includes/header.php';
                                     'Piutang' => 'hand-holding-usd',
                                     default => 'box'
                                 };
-                            ?>" style="margin-right: 10px; color: var(--primary-color);"></i>
+                            ?>" style="margin-right: 10px; color: var(--primary);"></i>
                             <?php echo htmlspecialchars($asset['type']); ?>
                         </span>
                         <span style="font-weight: 600;"><?php echo formatRupiah($asset['total']); ?></span>
@@ -148,7 +148,7 @@ require_once 'includes/header.php';
                 <?php if ($totalInvestments > 0): ?>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f2f5;">
                         <span>
-                            <i class="fas fa-chart-line" style="margin-right: 10px; color: var(--primary-color);"></i>
+                            <i class="fas fa-chart-line" style="margin-right: 10px; color: var(--primary);"></i>
                             Investasi
                         </span>
                         <span style="font-weight: 600;"><?php echo formatRupiah($totalInvestments); ?></span>
@@ -177,7 +177,7 @@ require_once 'includes/header.php';
                     <div style="font-size: 3rem; color: var(--warning-color); margin-bottom: 10px;">
                         <i class="fas fa-piggy-bank"></i>
                     </div>
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--dark-color);">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--text);">
                         <?php echo formatRupiah($totalAllAssets); ?>
                     </div>
                     <div style="color: #6c757d;">Total Kekayaan Bersih</div>
@@ -185,13 +185,13 @@ require_once 'includes/header.php';
                 
                 <div style="display: flex; justify-content: space-around; padding-top: 20px; border-top: 1px solid #eee;">
                     <div style="text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--success-color);">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--success);">
                             <?php echo $totalAllAssets > 0 ? number_format(($totalCash / $totalAllAssets) * 100, 1) : 0; ?>%
                         </div>
                         <div style="font-size: 0.85rem; color: #6c757d;">Likuid</div>
                     </div>
                     <div style="text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary);">
                             <?php echo $totalAllAssets > 0 ? number_format(($totalInvestments / $totalAllAssets) * 100, 1) : 0; ?>%
                         </div>
                         <div style="font-size: 0.85rem; color: #6c757d;">Investasi</div>

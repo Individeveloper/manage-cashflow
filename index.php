@@ -34,21 +34,22 @@ $totalExpenses = $stmt->fetch()['total'];
 $stmt = $pdo->query("SELECT COALESCE(SUM(current_value), 0) as total FROM investments");
 $totalInvestments = $stmt->fetch()['total'];
 
-// Get total cash assets
-$stmt = $pdo->query("SELECT COALESCE(SUM(amount), 0) as total FROM assets WHERE type = 'Cash'");
-$totalCash = $stmt->fetch()['total'];
+// Get total balance across all accounts
+$stmt = $pdo->query("SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE is_active = 1");
+$totalAccountBalance = $stmt->fetch()['total'];
 
-// Get total all assets (cash + investments)
-$totalAssets = $totalCash + $totalInvestments;
+// Get all accounts for overview
+$stmt = $pdo->query("SELECT * FROM accounts WHERE is_active = 1 ORDER BY FIELD(type, 'Utama', 'Tabungan', 'Dana Darurat', 'Investasi', 'E-Wallet', 'Lainnya'), name");
+$allAccounts = $stmt->fetchAll();
 
 // Get net balance (income - expenses)
 $netBalance = $totalIncome - $totalExpenses;
 
 // Get recent transactions (income and expenses combined)
 $stmt = $pdo->query("
-    (SELECT 'income' as type, description, amount, category, date FROM income ORDER BY date DESC LIMIT 5)
+    (SELECT 'income' as type, i.description, i.amount, i.category, i.date, a.name as account_name, a.icon as account_icon, a.color as account_color FROM income i LEFT JOIN accounts a ON i.account_id = a.id ORDER BY i.date DESC LIMIT 5)
     UNION ALL
-    (SELECT 'expense' as type, description, amount, category, date FROM expenses ORDER BY date DESC LIMIT 5)
+    (SELECT 'expense' as type, e.description, e.amount, e.category, e.date, a.name as account_name, a.icon as account_icon, a.color as account_color FROM expenses e LEFT JOIN accounts a ON e.account_id = a.id ORDER BY e.date DESC LIMIT 5)
     ORDER BY date DESC
     LIMIT 10
 ");
@@ -112,27 +113,65 @@ require_once 'includes/header.php';
     
     <div class="summary-card total">
         <div class="summary-card-icon">
-            <i class="fas fa-coins"></i>
+            <i class="fas fa-landmark"></i>
         </div>
-        <div class="summary-card-label">Total Aset (Cash + Investasi)</div>
-        <div class="summary-card-value"><?php echo formatRupiah($totalAssets); ?></div>
+        <div class="summary-card-label">Total Saldo Rekening</div>
+        <div class="summary-card-value"><?php echo formatRupiah($totalAccountBalance); ?></div>
     </div>
 </div>
 
 <!-- Net Balance Card -->
-<div class="card" style="margin-bottom: 30px; background: <?php echo $netBalance >= 0 ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)' : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'; ?>">
+<div class="stat-card" style="margin-bottom: 24px; border-left: 4px solid <?php echo $netBalance >= 0 ? '#16a34a' : '#dc2626'; ?>;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <div style="font-size: 0.9rem; color: #6c757d; margin-bottom: 5px;">Saldo Bersih (Pemasukan - Pengeluaran)</div>
-            <div style="font-size: 2rem; font-weight: 700; color: <?php echo $netBalance >= 0 ? '#059669' : '#dc2626'; ?>">
+            <div class="stat-card-label">Saldo Bersih (Pemasukan - Pengeluaran)</div>
+            <div class="stat-card-value" style="color: <?php echo $netBalance >= 0 ? '#16a34a' : '#dc2626'; ?>">
                 <?php echo formatRupiah($netBalance); ?>
             </div>
         </div>
-        <div style="font-size: 3rem; opacity: 0.3;">
+        <div style="font-size: 2rem; opacity: 0.2;">
             <i class="fas fa-<?php echo $netBalance >= 0 ? 'smile' : 'frown'; ?>"></i>
         </div>
     </div>
 </div>
+
+<!-- Account Balances Overview -->
+<?php if (count($allAccounts) > 0): ?>
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-landmark"></i>
+            Saldo Rekening
+        </h3>
+        <a href="accounts.php" class="btn btn-primary btn-sm">
+            <i class="fas fa-cog"></i> Kelola
+        </a>
+    </div>
+    <div class="accounts-grid">
+        <?php foreach ($allAccounts as $acc): ?>
+            <div class="account-mini-card" style="border-left: 3px solid <?php echo htmlspecialchars($acc['color']); ?>;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                    <div class="account-icon-sm" style="background: <?php echo htmlspecialchars($acc['color']); ?>;">
+                        <i class="fas fa-<?php echo htmlspecialchars($acc['icon']); ?>"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.85rem;"><?php echo htmlspecialchars($acc['name']); ?></div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary);"><?php echo htmlspecialchars($acc['type']); ?><?php echo $acc['bank_name'] ? ' - ' . htmlspecialchars($acc['bank_name']) : ''; ?></div>
+                    </div>
+                </div>
+                <div style="font-size: 1.1rem; font-weight: 700; color: <?php echo $acc['balance'] >= 0 ? '#16a34a' : '#dc2626'; ?>;">
+                    <?php echo formatRupiah($acc['balance']); ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <div style="margin-top: 12px; text-align: center;">
+        <a href="transfers.php" class="btn btn-success btn-sm" style="width: auto;">
+            <i class="fas fa-exchange-alt"></i> Transfer Antar Rekening
+        </a>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="row">
     <!-- Monthly Summary -->
@@ -165,7 +204,7 @@ require_once 'includes/header.php';
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
                 <div style="display: flex; justify-content: space-between;">
                     <span style="font-weight: 600;">Selisih Bulan Ini</span>
-                    <span style="font-weight: 700; color: <?php echo ($monthlyIncome - $monthlyExpenses) >= 0 ? '#059669' : '#dc2626'; ?>">
+                    <span style="font-weight: 700; color: <?php echo ($monthlyIncome - $monthlyExpenses) >= 0 ? '#16a34a' : '#dc2626'; ?>">
                         <?php echo formatRupiah($monthlyIncome - $monthlyExpenses); ?>
                     </span>
                 </div>
@@ -227,6 +266,7 @@ require_once 'includes/header.php';
                         <th>Tipe</th>
                         <th>Deskripsi</th>
                         <th>Kategori</th>
+                        <th>Rekening</th>
                         <th>Jumlah</th>
                     </tr>
                 </thead>
@@ -243,6 +283,16 @@ require_once 'includes/header.php';
                             </td>
                             <td><?php echo htmlspecialchars($transaction['description']); ?></td>
                             <td><?php echo htmlspecialchars($transaction['category']); ?></td>
+                            <td>
+                                <?php if ($transaction['account_name']): ?>
+                                    <span style="color: <?php echo htmlspecialchars($transaction['account_color'] ?? '#4361ee'); ?>;">
+                                        <i class="fas fa-<?php echo htmlspecialchars($transaction['account_icon'] ?? 'university'); ?>"></i>
+                                    </span>
+                                    <small><?php echo htmlspecialchars($transaction['account_name']); ?></small>
+                                <?php else: ?>
+                                    <span style="color: #6c757d;">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="<?php echo $transaction['type'] == 'income' ? 'text-success' : 'text-danger'; ?>" style="font-weight: 600;">
                                 <?php echo $transaction['type'] == 'income' ? '+' : '-'; ?><?php echo formatRupiah($transaction['amount']); ?>
                             </td>

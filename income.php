@@ -12,15 +12,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $description = trim($_POST['description']);
             $amount = floatval(str_replace(['.', ','], ['', '.'], $_POST['amount']));
             $category = trim($_POST['category']);
+            $account_id = intval($_POST['account_id']);
             $date = $_POST['date'];
             
-            if ($description && $amount > 0 && $date) {
-                $stmt = $pdo->prepare("INSERT INTO income (description, amount, category, date) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$description, $amount, $category, $date]);
-                $message = 'Pemasukan berhasil ditambahkan!';
-                $messageType = 'success';
+            if ($description && $amount > 0 && $account_id && $date) {
+                $pdo->beginTransaction();
+                try {
+                    // Insert income record (Debit: rekening bertambah, Kredit: pendapatan)
+                    $stmt = $pdo->prepare("INSERT INTO income (description, amount, category, account_id, date) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->execute([$description, $amount, $category, $account_id, $date]);
+                    
+                    // Update account balance (Debit rekening - saldo bertambah)
+                    $stmt = $pdo->prepare("UPDATE accounts SET balance = balance + ? WHERE id = ?");
+                    $stmt->execute([$amount, $account_id]);
+                    
+                    $pdo->commit();
+                    $message = 'Pemasukan berhasil ditambahkan dan saldo rekening diperbarui!';
+                    $messageType = 'success';
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $message = 'Gagal menambah pemasukan: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
             } else {
-                $message = 'Mohon lengkapi semua field dengan benar!';
+                $message = 'Mohon lengkapi semua field dengan benar (termasuk pilih rekening)!';
                 $messageType = 'danger';
             }
         } elseif ($_POST['action'] == 'edit') {
@@ -28,13 +43,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $description = trim($_POST['description']);
             $amount = floatval(str_replace(['.', ','], ['', '.'], $_POST['amount']));
             $category = trim($_POST['category']);
+            $account_id = intval($_POST['account_id']);
             $date = $_POST['date'];
             
-            if ($id && $description && $amount > 0 && $date) {
-                $stmt = $pdo->prepare("UPDATE income SET description = ?, amount = ?, category = ?, date = ? WHERE id = ?");
-                $stmt->execute([$description, $amount, $category, $date, $id]);
-                $message = 'Pemasukan berhasil diperbarui!';
-                $messageType = 'success';
+            if ($id && $description && $amount > 0 && $account_id && $date) {
+                $pdo->beginTransaction();
+                try {
+                    // Get old income data to reverse balance
+                    $stmt = $pdo->prepare("SELECT amount, account_id FROM income WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $oldIncome = $stmt->fetch();
+                    
+                    // Reverse old balance (Kredit rekening lama)
+                    if ($oldIncome && $oldIncome['account_id']) {
+                        $stmt = $pdo->prepare("UPDATE accounts SET balance = balance - ? WHERE id = ?");
+                        $stmt->execute([$oldIncome['amount'], $oldIncome['account_id']]);
+                    }
+                    
+                    // Update income record
+                    $stmt = $pdo->prepare("UPDATE income SET description = ?, amount = ?, category = ?, account_id = ?, date = ? WHERE id = ?");
+                    $stmt->execute([$description, $amount, $category, $account_id, $date, $id]);
+                    
+                    // Apply new balance (Debit rekening baru)
+                    $stmt = $pdo->prepare("UPDATE accounts SET balance = balance + ? WHERE id = ?");
+                    $stmt->execute([$amount, $account_id]);
+                    
+                    $pdo->commit();
+                    $message = 'Pemasukan berhasil diperbarui!';
+                    $messageType = 'success';
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $message = 'Gagal memperbarui pemasukan: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
             }
         }
     }
@@ -43,18 +84,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // Handle delete
 if (isset($_GET['delete'])) {
     $id = intval($_GET['delete']);
-    $stmt = $pdo->prepare("DELETE FROM income WHERE id = ?");
-    $stmt->execute([$id]);
-    $message = 'Pemasukan berhasil dihapus!';
-    $messageType = 'success';
+    $pdo->beginTransaction();
+    try {
+        // Get income data to reverse balance
+        $stmt = $pdo->prepare("SELECT amount, account_id FROM income WHERE id = ?");
+        $stmt->execute([$id]);
+        $oldIncome = $stmt->fetch();
+        
+        // Reverse balance (Kredit rekening - kurangi saldo)
+        if ($oldIncome && $oldIncome['account_id']) {
+            $stmt = $pdo->prepare("UPDATE accounts SET balance = balance - ? WHERE id = ?");
+            $stmt->execute([$oldIncome['amount'], $oldIncome['account_id']]);
+        }
+        
+        // Delete income record
+        $stmt = $pdo->prepare("DELETE FROM income WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        $pdo->commit();
+        $message = 'Pemasukan berhasil dihapus dan saldo rekening dikembalikan!';
+        $messageType = 'success';
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $message = 'Gagal menghapus pemasukan: ' . $e->getMessage();
+        $messageType = 'danger';
+    }
 }
 
 // Get income categories
 $stmt = $pdo->query("SELECT name FROM income_categories ORDER BY name");
 $categories = $stmt->fetchAll();
 
-// Get all income records
-$stmt = $pdo->query("SELECT * FROM income ORDER BY date DESC, id DESC");
+// Get active accounts
+$stmt = $pdo->query("SELECT * FROM accounts WHERE is_active = 1 ORDER BY name");
+$accounts = $stmt->fetchAll();
+
+// Get all income records with account name
+$stmt = $pdo->query("SELECT i.*, a.name as account_name, a.icon as account_icon, a.color as account_color FROM income i LEFT JOIN accounts a ON i.account_id = a.id ORDER BY i.date DESC, i.id DESC");
 $incomes = $stmt->fetchAll();
 
 // Get total income
@@ -109,6 +175,7 @@ require_once 'includes/header.php';
                         <th>Tanggal</th>
                         <th>Deskripsi</th>
                         <th>Kategori</th>
+                        <th>Rekening</th>
                         <th>Jumlah</th>
                         <th>Aksi</th>
                     </tr>
@@ -119,6 +186,16 @@ require_once 'includes/header.php';
                             <td><?php echo formatDate($income['date']); ?></td>
                             <td><?php echo htmlspecialchars($income['description']); ?></td>
                             <td><span class="badge badge-success"><?php echo htmlspecialchars($income['category']); ?></span></td>
+                            <td>
+                                <?php if ($income['account_name']): ?>
+                                    <span style="color: <?php echo htmlspecialchars($income['account_color'] ?? '#4361ee'); ?>;">
+                                        <i class="fas fa-<?php echo htmlspecialchars($income['account_icon'] ?? 'university'); ?>"></i>
+                                    </span>
+                                    <?php echo htmlspecialchars($income['account_name']); ?>
+                                <?php else: ?>
+                                    <span style="color: #6c757d;">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-success" style="font-weight: 600;">
                                 +<?php echo formatRupiah($income['amount']); ?>
                             </td>
@@ -174,6 +251,19 @@ require_once 'includes/header.php';
             </div>
             
             <div class="form-group">
+                <label class="form-label">Masuk ke Rekening *</label>
+                <select name="account_id" class="form-control" required>
+                    <option value="">-- Pilih Rekening Tujuan --</option>
+                    <?php foreach ($accounts as $acc): ?>
+                        <option value="<?php echo $acc['id']; ?>">
+                            <?php echo htmlspecialchars($acc['name']); ?> (<?php echo htmlspecialchars($acc['type']); ?>) - Saldo: <?php echo formatRupiah($acc['balance']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small style="color: #6c757d;"><i class="fas fa-info-circle"></i> Pemasukan akan menambah saldo rekening yang dipilih (Debit)</small>
+            </div>
+            
+            <div class="form-group">
                 <label class="form-label">Tanggal</label>
                 <input type="date" name="date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
             </div>
@@ -216,6 +306,18 @@ require_once 'includes/header.php';
             </div>
             
             <div class="form-group">
+                <label class="form-label">Masuk ke Rekening *</label>
+                <select name="account_id" id="edit_account_id" class="form-control" required>
+                    <option value="">-- Pilih Rekening Tujuan --</option>
+                    <?php foreach ($accounts as $acc): ?>
+                        <option value="<?php echo $acc['id']; ?>">
+                            <?php echo htmlspecialchars($acc['name']); ?> (<?php echo htmlspecialchars($acc['type']); ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="form-group">
                 <label class="form-label">Tanggal</label>
                 <input type="date" name="date" id="edit_date" class="form-control" required>
             </div>
@@ -233,6 +335,7 @@ function editIncome(income) {
     document.getElementById('edit_description').value = income.description;
     document.getElementById('edit_amount').value = new Intl.NumberFormat('id-ID').format(income.amount);
     document.getElementById('edit_category').value = income.category;
+    document.getElementById('edit_account_id').value = income.account_id || '';
     document.getElementById('edit_date').value = income.date;
     openModal('editModal');
 }
